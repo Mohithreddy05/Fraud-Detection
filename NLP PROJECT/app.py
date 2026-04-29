@@ -1,14 +1,35 @@
 import streamlit as st
 import joblib
 import spacy
+import subprocess
+import sys
 import re
+import os
 import pandas as pd
 from datetime import datetime
 
-# ---------- LOAD ----------
-nlp = spacy.load("en_core_web_sm")
-model = joblib.load("model.pkl")
-vectorizer = joblib.load("vectorizer.pkl")
+# ---------- LOAD spaCy MODEL (auto-download if missing) ----------
+@st.cache_resource
+def load_spacy():
+    try:
+        return spacy.load("en_core_web_sm")
+    except OSError:
+        subprocess.run(
+            [sys.executable, "-m", "spacy", "download", "en_core_web_sm"],
+            check=True
+        )
+        return spacy.load("en_core_web_sm")
+
+# ---------- LOAD ML MODEL & VECTORIZER ----------
+@st.cache_resource
+def load_model():
+    base = os.path.dirname(__file__)
+    model = joblib.load(os.path.join(base, "model.pkl"))
+    vectorizer = joblib.load(os.path.join(base, "vectorizer.pkl"))
+    return model, vectorizer
+
+nlp = load_spacy()
+model, vectorizer = load_model()
 
 urgent_words = ["urgent", "immediately", "hacked", "fraud", "unauthorized"]
 
@@ -47,21 +68,21 @@ if "history" not in st.session_state:
     )
 
 # ---------- PAGE ----------
-st.set_page_config(page_title="Fraud Dashboard", layout="wide")
+st.set_page_config(page_title="Fraud Detection Dashboard", page_icon="💳", layout="wide")
 
 # ---------- HEADER ----------
 st.markdown("<h1 style='text-align:center;'>💳 Fraud Detection Dashboard</h1>", unsafe_allow_html=True)
-st.markdown("<p style='text-align:center;color:gray;'>Real-time analysis of customer messages</p>", unsafe_allow_html=True)
+st.markdown("<p style='text-align:center;color:gray;'>Real-time analysis of customer messages using NLP</p>", unsafe_allow_html=True)
 st.markdown("---")
 
 # ---------- INPUT BAR ----------
 c1, c2 = st.columns([5,1])
 with c1:
-    user_input = st.text_area("Enter Message", height=120, placeholder="Paste customer message...")
+    user_input = st.text_area("Enter Message", height=120, placeholder="Paste customer message here...")
 with c2:
     st.write("")
     st.write("")
-    run = st.button("Analyze", use_container_width=True)
+    run = st.button("🔍 Analyze", use_container_width=True)
 
 # ---------- PROCESS ----------
 if run and user_input.strip():
@@ -85,6 +106,8 @@ if run and user_input.strip():
         [pd.DataFrame([new_row]), st.session_state.history],
         ignore_index=True
     )
+elif run and not user_input.strip():
+    st.warning("Please enter a message before analyzing.")
 
 # ---------- KPIs ----------
 df = st.session_state.history
@@ -106,7 +129,7 @@ with left:
     if len(df) > 0:
         st.bar_chart(df["risk_level"].value_counts())
     else:
-        st.info("No data yet")
+        st.info("No data yet — analyze a message to get started.")
 
     st.subheader("📈 Confidence Trend")
     if len(df) > 0:
@@ -122,18 +145,18 @@ with left:
 
 # RIGHT: Gauge + Filters
 with right:
-    st.subheader("⚠ Latest Risk Gauge")
+    st.subheader("⚠️ Latest Risk Gauge")
     if len(df) > 0:
         latest = df.iloc[0]
         st.progress(latest["risk"]/100)
         st.write(f"**{latest['risk']}% — {latest['risk_level']} Risk**")
 
         if latest["risk_level"] == "High":
-            st.error("Immediate attention required")
+            st.error("🚨 Immediate attention required")
         elif latest["risk_level"] == "Medium":
-            st.warning("Needs review")
+            st.warning("⚠️ Needs review")
         else:
-            st.success("Safe")
+            st.success("✅ Safe")
     else:
         st.info("Run analysis to see gauge")
 
@@ -142,14 +165,30 @@ with right:
     if len(df) > 0:
         level = st.selectbox("Risk Level", ["All","High","Medium","Low"])
         if level != "All":
-            st.dataframe(df[df["risk_level"]==level], use_container_width=True)
+            filtered = df[df["risk_level"]==level]
+            st.dataframe(filtered, use_container_width=True)
+        else:
+            st.dataframe(df, use_container_width=True)
     else:
         st.write("No data to filter")
 
 # ---------- SIDEBAR ----------
-st.sidebar.title("📌 Info")
+st.sidebar.title("📌 About")
 st.sidebar.markdown("""
-- Model: TF-IDF + Logistic Regression  
-- Accuracy: ~88%  
-- Features: Fraud, Urgency, Amount, Risk  
+**Model**: TF-IDF + Logistic Regression  
+**Accuracy**: ~88%  
+**Features Analyzed**:
+- 🔴 Fraud probability score
+- ⏱ Urgency detection
+- 💰 Amount extraction (NER)
+- 📉 Composite risk score
+
+---
+**Risk Levels**:
+- 🔴 High: > 70%
+- 🟡 Medium: 40–70%
+- 🟢 Low: < 40%
 """)
+
+st.sidebar.markdown("---")
+st.sidebar.caption("Built with Streamlit · NLP Fraud Detection Project")
