@@ -1,24 +1,15 @@
 import streamlit as st
 import joblib
 import spacy
-import subprocess
-import sys
 import re
 import os
 import pandas as pd
 from datetime import datetime
 
-# ---------- LOAD spaCy MODEL (auto-download if missing) ----------
+# ---------- LOAD spaCy MODEL (installed via requirements.txt wheel) ----------
 @st.cache_resource
 def load_spacy():
-    try:
-        return spacy.load("en_core_web_sm")
-    except OSError:
-        subprocess.run(
-            [sys.executable, "-m", "spacy", "download", "en_core_web_sm"],
-            check=True
-        )
-        return spacy.load("en_core_web_sm")
+    return spacy.load("en_core_web_sm")
 
 # ---------- LOAD ML MODEL & VECTORIZER ----------
 @st.cache_resource
