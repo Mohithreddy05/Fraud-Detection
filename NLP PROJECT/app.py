@@ -1,15 +1,9 @@
 import streamlit as st
 import joblib
-import spacy
 import re
 import os
 import pandas as pd
 from datetime import datetime
-
-# ---------- LOAD spaCy MODEL (installed via requirements.txt wheel) ----------
-@st.cache_resource
-def load_spacy():
-    return spacy.load("en_core_web_sm")
 
 # ---------- LOAD ML MODEL & VECTORIZER ----------
 @st.cache_resource
@@ -19,7 +13,6 @@ def load_model():
     vectorizer = joblib.load(os.path.join(base, "vectorizer.pkl"))
     return model, vectorizer
 
-nlp = load_spacy()
 model, vectorizer = load_model()
 
 urgent_words = ["urgent", "immediately", "hacked", "fraud", "unauthorized"]
@@ -35,12 +28,9 @@ def detect_urgency(text):
     return min(sum([0.2 for w in urgent_words if w in text.lower()]), 1)
 
 def extract_amount(text):
-    doc = nlp(text)
-    for ent in doc.ents:
-        if ent.label_ == "MONEY":
-            return ent.text
-    match = re.findall(r"\d+[,\d]*", text)
-    return match[0] if match else "Not Detected"
+    # Match currency symbols + numbers, or plain numbers
+    match = re.findall(r"[\$\£\€\₹]?\s?\d[\d,\.]*", text)
+    return match[0].strip() if match else "Not Detected"
 
 def calculate_risk(fraud_score, urgency_score, amount):
     amount_factor = 0.8 if amount != "Not Detected" else 0.3
@@ -171,7 +161,7 @@ st.sidebar.markdown("""
 **Features Analyzed**:
 - 🔴 Fraud probability score
 - ⏱ Urgency detection
-- 💰 Amount extraction (NER)
+- 💰 Amount extraction (Regex)
 - 📉 Composite risk score
 
 ---
